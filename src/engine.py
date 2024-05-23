@@ -84,7 +84,11 @@ async def evaluate(
 ):
 	key = f"ask-magnus:{board.fen()}:{engine.id}:{ENGINE_DEPTH}"
 	limit = chess.engine.Limit(depth=ENGINE_DEPTH)
-	if not await db.exists(key):
+	is_cached = await db.exists(key); 
+	if is_cached:
+		raw_data = await db.get(key)
+		result = pickle.loads(raw_data)
+	else:
 		result = await engine.analyse(board, limit=limit, multipv=multipv)
 		if multipv == 1:
 			result = [result]
@@ -92,16 +96,13 @@ async def evaluate(
 		# result object it's very well developed and all __repr__ are
 		# reinstantiatable. So, I'll pickle. Fingers crossed.
 		await db.set(key, pickle.dumps(result))
-		return result
-	else:
-		raw_data = await db.get(key)
-		return pickle.loads(raw_data)
+	return is_cached, result
 
 
 async def main(limit_games=None):
 	pgn = open(PGN_PATH)
 	game_counter = 1
-	first_print = True
+	print_lines_to_clear = 0
 	
 	# Get chess engine
 	transport, engine = await chess.engine.popen_uci("/opt/homebrew/bin/stockfish")
@@ -113,15 +114,17 @@ async def main(limit_games=None):
 	while game := chess.pgn.read_game(pgn):
 		board = game.board()
 		for move in game.mainline_moves():
-			if not first_print:
-				sys.stdout.write("\033[11A")
-			else:
-				first_print = False
+			if print_lines_to_clear > 0:
+				sys.stdout.write(f"\033[{print_lines_to_clear}A")
 			board.push(move)
 			start = time.time()
-			evaluation = await evaluate(engine, db, board)
+			is_cached, evaluation = await evaluate(engine, db, board)
 			end = time.time()
+
 			print(colorama.Fore.BLUE + f'Game {game_counter}' + colorama.Fore.RESET)
+			if is_cached:
+				print_lines_to_clear = 1
+				continue
 			print(pretty_fen(board.fen()))
 			print(f" Time to evaluate: {end - start:.2f} seconds")
 			text = f" Evaluation: {evaluation[0]['score']}"
@@ -135,6 +138,7 @@ async def main(limit_games=None):
 				if len(top_moves) > 0:
 					text += f" | Top moves: {', '.join(top_moves)}"	
 			print(text)
+			print_lines_to_clear = 11
 
 		# Exit if we reach game count limit
 		game_counter += 1
