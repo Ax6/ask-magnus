@@ -4,7 +4,7 @@ import chess
 import asyncio
 import colorama
 import argparse
-from src.engine import evaluate, get_engine, get_db
+from src.silicon_friend import evaluate, get_engine, get_db
 
 
 argparser = argparse.ArgumentParser(

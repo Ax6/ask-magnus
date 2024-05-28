@@ -13,16 +13,13 @@ with await engine.analysis(chess.Board() ...) as analysis:
 		if ..
 			break
 """
-import sys
-import time
 import chess
 import redis
 import pickle
-import asyncio
-import colorama
 import chess.pgn
 import chess.engine
 import redis.asyncio
+from typing import List
 
 
 ENGINE_CONFIG = {
@@ -43,7 +40,7 @@ async def evaluate(
 	engine: chess.engine.UciProtocol,
 	board: chess.Board,
 	multipv:int=3
-):
+) -> List[chess.engine.InfoDict]:
 	key = f"ask-magnus:{board.fen()}:{engine.id}:{ENGINE_DEPTH}"
 	limit = chess.engine.Limit(depth=ENGINE_DEPTH)
 	if await db.exists(key):
